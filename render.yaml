@@ -1,0 +1,20 @@
+# Render Blueprint — deploys the FastAPI backend as a free web service.
+# Deploy: push this repo to GitHub → Render Dashboard → New → Blueprint → pick the repo.
+services:
+  - type: web
+    name: lead-agent-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Start command: no --reload in production; PORT is injected by Render.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false          # you'll paste your real key in the Render dashboard
+      - key: AUTO_SEED
+        value: "1"           # seed the 7 demo leads on first boot
+      - key: ALLOWED_ORIGINS
+        sync: false          # paste your Vercel URL after the frontend deploys
+      - key: DATABASE_URL
+        value: ""            # empty → SQLite on the instance's disk

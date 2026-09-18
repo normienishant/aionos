@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #171717;
+  --background: #fafafa;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-all {
+  transition: all 0.2s ease;
+}
+
+/* Code-style trace blocks */
+.trace-block {
+  @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm;
+}
+
+/* Email display block */
+.email-block {
+  @apply bg-white border border-gray-200 rounded-lg p-5 whitespace-pre-wrap text-sm leading-relaxed;
+}
+
+/* Scrollbar styling for trace area */
+.trace-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.trace-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+.trace-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
