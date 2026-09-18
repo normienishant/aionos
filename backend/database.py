@@ -10,7 +10,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 # Default to SQLite for easy local development — just works, no setup.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./leads.db")
+# (Empty-string env values are treated as unset — hosts sometimes inject them.)
+DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./leads.db"
 
 
 class Base(DeclarativeBase):

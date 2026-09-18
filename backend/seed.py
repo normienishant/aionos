@@ -14,6 +14,7 @@ Each lead has different enrichment characteristics to show the scoring logic wor
 import json
 import os
 import sys
+import time
 
 # Windows consoles often default to cp1252 which can't print emoji — force UTF-8
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -117,6 +118,9 @@ def seed_leads():
     print(f"\n🌱 Seeding {len(MOCK_LEADS)} mock leads...\n")
 
     for i, lead_data in enumerate(MOCK_LEADS, 1):
+        # Gentle pacing so the free-tier LLM per-minute rate limit isn't hammered
+        if i > 1:
+            time.sleep(8)
         print(f"--- Lead {i}/{len(MOCK_LEADS)}: {lead_data['name']} ({lead_data['company']}) ---")
 
         # Create the lead

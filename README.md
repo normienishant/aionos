@@ -153,7 +153,7 @@ The app works without an API key — the seed script falls back to local scoring
 
 | Decision | Agent or Human? | Details |
 |---|---|---|
-| Enrich company data | 🤖 Agent | Uses mock enrichment (would be Clearbit/Apollo in production) |
+| Enrich company data | 🤖 Agent | Live Wikipedia REST API lookup; honest heuristic fallback when no article exists (`enrichment_source` field records which ran) |
 | Check past interactions | 🤖 Agent | Queries the DB automatically |
 | Score the lead (0-100) | 🤖 Agent | Applies ICP rules with clear reasoning |
 | Auto-outreach (score ≥ 70) | 🤖 Agent | Agent drafts email, marks as "sent" |
@@ -180,7 +180,8 @@ The app works without an API key — the seed script falls back to local scoring
 - **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
 - **Backend**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL (via SQLAlchemy) — falls back to SQLite for local dev
-- **LLM**: Google Gemini 1.5 Flash (with function calling / tool use)
+- **LLM**: Google Gemini (flash-lite via the `latest` alias — free-tier friendly) with native function calling / tool use
+- **Real third-party integrations**: Wikipedia REST API for company enrichment (free, no key), Gemini for email generation — both with graceful, honestly-labeled fallbacks
 - **No frameworks**: Agent loop is implemented directly with the LLM's native function-calling API — transparent, explainable, no "black box"
 
 ---

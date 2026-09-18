@@ -169,8 +169,11 @@ def run_agent_loop(lead_data: dict, db: Session) -> dict:
 
 def _run_llm_loop(lead_data: dict, db: Session) -> dict:
     """The LLM-driven agent loop using Gemini native function calling."""
+    # Model name resolves through the "latest" alias so it keeps working as
+    # Google retires old model versions. Default is flash-LITE: the free tier
+    # gives it a much larger daily quota than regular flash. Override via LLM_MODEL.
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name=os.getenv("LLM_MODEL", "gemini-flash-lite-latest"),
         tools=TOOL_DEFINITIONS,
         system_instruction=SYSTEM_PROMPT,
     )
@@ -217,7 +220,9 @@ Please evaluate this lead. Start by calling enrich_company to look up their comp
                     if hasattr(part, 'function_call') and part.function_call:
                         fc = part.function_call
                         tool_name = fc.name
-                        tool_args = dict(fc.args)
+                        # Gemini returns args as protobuf structs (MapComposite for
+                        # nested objects) — sanitize to plain JSON-safe types first.
+                        tool_args = _sanitize(json.loads(json.dumps(dict(fc.args), default=str)))
 
                         # Execute the actual tool and log it in the trace
                         step_trace = {
@@ -244,12 +249,11 @@ Please evaluate this lead. Start by calling enrich_company to look up their comp
                             reasoning_trace.append(step_trace)
 
                         elif tool_name == "score_lead":
-                            # Pass the data we've already gathered
+                            # Pass the data we've already gathered — the orchestrator
+                            # holds the authoritative tool results, not the LLM's echo
                             args = dict(tool_args)
-                            if isinstance(args.get("enrichment_data"), str):
-                                args["enrichment_data"] = enriched_data or {}
-                            if isinstance(args.get("past_interactions"), str):
-                                args["past_interactions"] = past_interactions or {}
+                            args["enrichment_data"] = enriched_data or {}
+                            args["past_interactions"] = past_interactions or {}
                             result = score_lead(**args)
                             score_result = result
                             step_trace["result"] = result
@@ -257,11 +261,10 @@ Please evaluate this lead. Start by calling enrich_company to look up their comp
 
                         elif tool_name == "draft_outreach_email":
                             args = dict(tool_args)
-                            if isinstance(args.get("enrichment_data"), str):
-                                args["enrichment_data"] = enriched_data or {}
-                            result = draft_outreach_email(**args)
-                            generated_email = result
-                            step_trace["result"] = {"email_preview": result[:200] + "..."}
+                            args["enrichment_data"] = enriched_data or {}
+                            generated_email, drafted_by = draft_outreach_email(**args)
+                            result = {"drafted_by": drafted_by, "email_preview": generated_email[:160] + "..."}
+                            step_trace["result"] = result
                             reasoning_trace.append(step_trace)
 
                         else:
@@ -354,14 +357,14 @@ def _run_local_pipeline(lead_data: dict, db: Session, reason: str = "GEMINI_API_
 
     generated_email = None
     if decision in ("auto-outreach-sent", "needs-human-review"):
-        generated_email = draft_outreach_email(
+        generated_email, drafted_by = draft_outreach_email(
             lead_data["name"], lead_data["company"], lead_data.get("title", ""),
             lead_data["message"], enrichment, score_result["score"], score_result["reasoning"],
         )
         trace.append({
             "step": 4, "tool_called": "draft_outreach_email",
             "arguments": {"company": lead_data["company"], "score": score_result["score"]},
-            "result": {"email_preview": generated_email[:200] + "..."},
+            "result": {"drafted_by": drafted_by, "email_preview": generated_email[:160] + "..."},
             "mode": "local-fallback",
         })
 
@@ -377,6 +380,17 @@ def _run_local_pipeline(lead_data: dict, db: Session, reason: str = "GEMINI_API_
     return _build_result(
         lead_data, enrichment, past, score_result, decision, generated_email, trace,
     )
+
+
+def _sanitize(obj):
+    """Recursively convert protobuf-ish values (MapComposite etc.) to plain JSON types."""
+    if isinstance(obj, dict):
+        return {str(k): _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, (int, float, bool)) or obj is None:
+        return obj
+    return str(obj)
 
 
 def _decide_from_score(score: int) -> str:

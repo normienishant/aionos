@@ -2,43 +2,96 @@
 Agent tool functions.
 
 These are the four distinct tools the LLM agent can invoke via function calling.
-Each is a standalone Python function that could be swapped for a real API call
-in production — right now they use mock data or local DB queries.
+Each is a standalone Python function so it can be swapped or upgraded without
+touching the agent loop.
+
+Real integrations used:
+  - enrich_company: live Wikipedia REST API lookup (summary + extract), with a
+    clearly-labeled deterministic fallback when a company has no article or
+    the network is unavailable.
+  - draft_outreach_email: a real Gemini LLM call that writes a personalized
+    email from the lead's context, with a template fallback.
 """
 
 import json
+import os
+from datetime import datetime, timezone
+
+import httpx
 from sqlalchemy.orm import Session
 from models import Lead, LeadDecision
+
+# Model for email generation — default is flash-LITE: the free tier gives it a
+# much larger daily quota than regular flash. Resolves via the "latest" alias.
+_EMAIL_MODEL = os.getenv("LLM_MODEL", "gemini-flash-lite-latest")
+
+# Wikimedia's robot policy requires a descriptive User-Agent with contact info.
+_WIKI_UA = "SalesLeadQualificationAgent/1.0 (https://github.com/normienishant/aionos; contact: contact-via-github) httpx"
 
 
 def enrich_company(company_name: str) -> dict:
     """
     TOOL: enrich_company
-    Given a company name, return simulated enrichment data.
-    
-    In production, this would call Clearbit, Apollo, or similar.
-    Here we generate realistic mock data based on the company name to make
-    the demo convincing.
+
+    Given a company name, return enrichment data. Primary source: the live
+    Wikipedia REST API (real third-party HTTP call — free, no API key needed).
+    If the company has no Wikipedia article (most small/private companies),
+    falls back to deterministic heuristic data that is honestly labeled.
     """
-    # Deterministic mock enrichment based on company name hash
-    # This ensures the same company always gets the same data
     name_lower = company_name.lower().strip()
     name_hash = sum(ord(c) for c in name_lower)
 
+    # --- Attempt 1: real Wikipedia REST API lookup (summary + extract) ---
+    article_title = None
+    extract = None
+    try:
+        search_resp = httpx.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query", "list": "search", "srsearch": company_name,
+                "format": "json", "srlimit": 1,
+            },
+            headers={"User-Agent": _WIKI_UA},
+            timeout=8.0,
+        )
+        hits = search_resp.json().get("query", {}).get("search", [])
+        if hits:
+            article_title = hits[0]["title"]
+            # Cheap relevance filter: at least one significant word of the
+            # company name should appear in the article title.
+            significant = [w for w in name_lower.split() if len(w) > 2 and w not in ("the", "and", "for", "ltd", "llc", "inc", "group")]
+            if significant and not any(w in article_title.lower() for w in significant):
+                article_title = None
+        if article_title:
+            sum_resp = httpx.get(
+                f"https://en.wikipedia.org/api/rest_v1/page/summary/{article_title.replace(' ', '_')}",
+                headers={"User-Agent": _WIKI_UA},
+                timeout=8.0,
+            )
+            extract = (sum_resp.json().get("extract") or "")[:600] or None
+    except (httpx.HTTPError, ValueError, KeyError):
+        article_title = None  # network error / bad JSON → fall through to fallback
+        extract = None
+
+    if article_title and extract:
+        return {
+            "company_name": company_name,
+            "matched_wikipedia_article": article_title,
+            "industry": _classify_industry(extract),
+            "size": "See description (Wikipedia-verified organization)",
+            "region": "See description",
+            "description": extract,
+            "enrichment_source": f"wikipedia_api ({datetime.now(timezone.utc).date().isoformat()})",
+        }
+
+    # --- Fallback: deterministic heuristic data, honestly labeled ---
     industries = [
-        "SaaS / Enterprise Software",
-        "FinTech",
-        "HealthTech",
-        "E-Commerce / Retail",
-        "Manufacturing",
-        "Consulting / Professional Services",
-        "EdTech",
-        "Logistics / Supply Chain",
+        "SaaS / Enterprise Software", "FinTech", "HealthTech", "E-Commerce / Retail",
+        "Manufacturing", "Consulting / Professional Services", "EdTech", "Logistics / Supply Chain",
     ]
     regions = ["North America", "Europe", "APAC", "LATAM", "Middle East", "India / South Asia"]
     sizes = ["1-10 (Startup)", "11-50 (Small)", "51-200 (Mid-size)", "201-1000 (Large)", "1000+ (Enterprise)"]
 
-    # Simulate some well-known companies with better data
     known = {
         "google":    {"industry": "Technology / Cloud", "size": "10000+ (Enterprise)", "region": "North America", "website": "google.com", "founded": 1998},
         "microsoft": {"industry": "Technology / Enterprise Software", "size": "10000+ (Enterprise)", "region": "North America", "website": "microsoft.com", "founded": 1975},
@@ -51,10 +104,9 @@ def enrich_company(company_name: str) -> dict:
     if name_lower in known:
         data = known[name_lower]
     else:
-        # Long company names trend toward larger/established orgs; short names
-        # trend toward small businesses. Keeps the demo narrative coherent.
-        # Non-corporate names (local shops, freelance businesses) get small-business
-        # enrichment + a non-corporate industry so scoring penalizes them naturally.
+        # Heuristics: name markers → industry; name length → size bucket.
+        # Non-corporate names get small-business enrichment so scoring
+        # penalizes them naturally.
         local_business_markers = ["shop", "pizza", "cafe", "salon", "freelance",
                                   "photography", "restaurant", "store", "boutique",
                                   "lawn", "cleaning", "repair", "tutor"]
@@ -69,9 +121,6 @@ def enrich_company(company_name: str) -> dict:
         else:
             size = sizes[0 if name_hash % 2 == 0 else 1]    # Startup or Small
 
-        # Company names usually reflect the industry ("Global Finance Partners"
-        # → FinTech, "TechCorp Solutions" → SaaS) — use name markers for a
-        # sensible industry pick, falling back to a hash for unknown names.
         industry_markers = [
             (["software", "tech", "cloud", "saas", "systems", "solutions", "labs", "digital"], "SaaS / Enterprise Software"),
             (["finance", "financial", "bank", "capital", "credit", "invest"], "FinTech"),
@@ -90,7 +139,6 @@ def enrich_company(company_name: str) -> dict:
             industry = industries[name_hash % len(industries)]
 
         if is_local_business:
-            # Non-corporate industries map to low ICP relevance
             local_industries = ["Food & Beverage / Local Retail", "Local Services / Sole Proprietor"]
             industry = local_industries[name_hash % len(local_industries)]
 
@@ -105,8 +153,27 @@ def enrich_company(company_name: str) -> dict:
     return {
         "company_name": company_name,
         **data,
-        "enrichment_source": "mock_enrichment_v1",
+        "enrichment_source": "heuristic_fallback (no wikipedia match)",
     }
+
+
+def _classify_industry(extract: str) -> str:
+    """Classify an industry from a Wikipedia extract via keyword matching."""
+    text = extract.lower()
+    industry_markers = [
+        (["software", "technology", "cloud", "saas", "computing", "ai "], "Technology / Cloud"),
+        (["bank", "financial", "finance", "insurance", "payment"], "Financial Services"),
+        (["retail", "e-commerce", "ecommerce", "shopping"], "E-Commerce / Retail"),
+        (["pharmaceutical", "healthcare", "hospital", "medical"], "Healthcare"),
+        (["manufactur", "automotive", "industrial"], "Manufacturing"),
+        (["consulting", "professional services", "advisory"], "Consulting / Professional Services"),
+        (["telecommunication", "telecom", "wireless"], "Telecommunications"),
+        (["media", "entertainment", "film", "streaming"], "Media / Entertainment"),
+    ]
+    for markers, industry in industry_markers:
+        if any(m in text for m in markers):
+            return industry
+    return "Diversified / Other"
 
 
 def check_past_interactions(email: str, company_name: str, db: Session, exclude_lead_id: str | None = None) -> dict:
@@ -173,6 +240,10 @@ def score_lead(
     if "1000+" in size or "10000+" in size or "Enterprise" in size:
         score += 25
         reasons.append("Company size: Enterprise/large (+25)")
+    elif "Wikipedia-verified" in size:
+        # Notable enough to have an encyclopedia article — solid mid signal
+        score += 15
+        reasons.append("Notable organization (Wikipedia-verified) (+15)")
     elif "201" in size or "Large" in size:
         score += 20
         reasons.append("Company size: Large (+20)")
@@ -187,7 +258,7 @@ def score_lead(
         reasons.append("Company size: Startup/very small (+2)")
 
     # --- Industry Match (25 pts) ---
-    high_value_industries = ["saas", "enterprise", "fintech", "cloud", "consulting", "technology"]
+    high_value_industries = ["saas", "enterprise", "fintech", "financial", "cloud", "consulting", "technology", "software"]
     industry = enrichment_data.get("industry", "").lower()
     if any(ind in industry for ind in high_value_industries):
         score += 25
@@ -253,14 +324,54 @@ def draft_outreach_email(
     enrichment_data: dict,
     score: int,
     score_reason: str,
-) -> str:
+) -> tuple[str, str]:
     """
     TOOL: draft_outreach_email
-    Generate a personalized first outreach email for high-scoring leads.
 
-    In production, this would be an LLM call. Here we template it with
-    personalization from the lead data — clean enough to demo and explain.
+    Generates a personalized first outreach email. Primary path: a real Gemini
+    LLM call conditioned on the lead's data and enrichment context. If the LLM
+    is unavailable (no key / quota / network), falls back to the template so
+    the loop never breaks.
+
+    Returns (email_text, drafted_by) where drafted_by is "gemini-llm" or
+    "template-fallback" — recorded in the reasoning trace for transparency.
     """
+    # --- Attempt 1: real LLM generation (one retry for transient errors) ---
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        for attempt in range(2):
+            try:
+                import time as _time
+                import google.generativeai as genai
+
+                industry = enrichment_data.get("industry", "their industry")
+                description = (enrichment_data.get("description") or "")[:300]
+                prompt = f"""You are a B2B sales rep writing the FIRST outreach email to an inbound lead.
+
+Lead: {name}, {title or 'job title unknown'} at {company}
+Their inquiry: "{message}"
+Company context: {industry}. {description}
+Lead qualification score: {score}/100 — {score_reason}
+
+Write a short, specific, professional email (80-140 words). Rules:
+- Subject line starting with 'Subject:'
+- Reference their actual inquiry directly
+- One clear call to action (a 15-minute call)
+- No invented facts, no fake customer names, no placeholders like [key benefit]
+- Sign off as '[Your Name]'"""
+                model = genai.GenerativeModel(_EMAIL_MODEL)
+                response = model.generate_content(prompt)
+                text = (response.text or "").strip()
+                if text:
+                    return text, "gemini-llm"
+            except Exception:
+                if attempt == 0:
+                    _time.sleep(12)  # brief pause (often a rate limit) and retry once
+                continue
+
+    # --- Fallback: deterministic template ---
+
+    # --- Fallback: deterministic template ---
     industry = enrichment_data.get("industry", "your industry")
     company_size = enrichment_data.get("size", "your team size")
 
@@ -279,4 +390,4 @@ Best,
 [Company]
 """
 
-    return email.strip()
+    return email.strip(), "template-fallback"
