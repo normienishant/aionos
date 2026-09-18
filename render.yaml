@@ -9,7 +9,12 @@ services:
     buildCommand: pip install -r requirements.txt
     # Start command: no --reload in production; PORT is injected by Render.
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /leads
     envVars:
+      # Python 3.11: stable wheel coverage for all deps (Render's default 3.14
+      # forces source builds of pydantic-core etc., which fail on the builder).
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: GEMINI_API_KEY
         sync: false          # you'll paste your real key in the Render dashboard
       - key: AUTO_SEED
