@@ -1,6 +1,17 @@
 # Sales Lead Qualification & Outreach Agent
 
+**Live demo:** [aionos-beta.vercel.app](https://aionos-beta.vercel.app) (frontend) · [lead-agent-backend-wu81.onrender.com/leads](https://lead-agent-backend-wu81.onrender.com/leads) (API) · [CI](https://github.com/normienishant/aionos/actions) · 14/14 tests passing
+
+> Render's free tier sleeps after ~15 min idle — the first request takes ~45s to wake, after that it's fast.
+
 An agentic AI tool for the Sales & Alliances track of the Agentic AI Factory program.
+
+## 60-Second Demo Script
+
+1. **Pipeline** (`/`) — 8 seeded leads, color-coded routing: green auto-outreach, amber needs-review, red discarded. Click the stat tiles to filter.
+2. **Open "Priya Sharma"** — ICP score with a rubric breakdown (size / industry / intent / history / domain / seniority), company enrichment with its source stamped, and the **agent reasoning trace**: each tool call, its arguments, its result, in order.
+3. **Submit a new lead** — paste any inquiry. The agent enriches the company (live Wikipedia API), checks history, scores it, drafts a personalized email (real Gemini), and routes it. The trace of that exact run is on the detail page.
+4. Point out the **human-in-the-loop boundary**: medium-confidence leads get a suggested draft plus a review warning — nothing sends itself.
 
 ## Business Problem
 
