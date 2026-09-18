@@ -3,85 +3,54 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-// Types
 interface Lead {
   id: string;
   name: string;
   email: string;
   company: string;
   title: string | null;
-  message: string;
   created_at: string;
   score: number | null;
-  score_reason: string | null;
   decision: string | null;
 }
 
-// Status badge component
-function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="text-gray-400 text-sm">Pending</span>;
-
-  const styles: Record<string, string> = {
-    "auto-outreach-sent": "bg-green-100 text-green-800 border-green-200",
-    "needs-human-review": "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "discarded": "bg-red-100 text-red-800 border-red-200",
-  };
-
-  const labels: Record<string, string> = {
-    "auto-outreach-sent": "Auto-Outreach Sent",
-    "needs-human-review": "Needs Review",
-    "discarded": "Discarded",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-        styles[status] || "bg-gray-100 text-gray-800"
-      }`}
-    >
-      {labels[status] || status}
-    </span>
-  );
+function Status({ decision }: { decision: string | null }) {
+  if (!decision) return <span className="status status-pending"><span className="dot" />queued</span>;
+  if (decision === "auto-outreach-sent")
+    return <span className="status status-auto"><span className="dot" />Auto-outreach</span>;
+  if (decision === "needs-human-review")
+    return <span className="status status-review"><span className="dot" />Needs review</span>;
+  return <span className="status status-discard"><span className="dot" />Discarded</span>;
 }
 
-// Score display with color coding
-function ScoreDisplay({ score }: { score: number | null }) {
-  if (score === null) return <span className="text-gray-400">—</span>;
-
-  const color =
-    score >= 70 ? "text-green-600" : score >= 40 ? "text-yellow-600" : "text-red-600";
-
-  return (
-    <span className={`font-bold ${color}`}>{score}</span>
-  );
+function Score({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-stone-300 mono">—</span>;
+  const tone =
+    score >= 70 ? "text-green-800" : score >= 40 ? "text-amber-700" : "text-red-700";
+  return <span className={`mono font-semibold ${tone}`}>{score}</span>;
 }
 
-export default function Dashboard() {
+const FILTERS = [
+  { key: null as string | null, label: "All leads" },
+  { key: "auto-outreach-sent", label: "Auto-outreach" },
+  { key: "needs-human-review", label: "Needs review" },
+  { key: "discarded", label: "Discarded" },
+];
+
+export default function PipelinePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchLeads();
+    fetch("/api/leads")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(setLeads)
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
   }, []);
 
-  async function fetchLeads() {
-    try {
-      const res = await fetch("/api/leads");
-      const data = await res.json();
-      setLeads(data);
-    } catch (err) {
-      console.error("Failed to fetch leads:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const filteredLeads = filter
-    ? leads.filter((l) => l.decision === filter)
-    : leads;
-
-  // Count by status
   const counts = {
     total: leads.length,
     auto: leads.filter((l) => l.decision === "auto-outreach-sent").length,
@@ -89,160 +58,94 @@ export default function Dashboard() {
     discarded: leads.filter((l) => l.decision === "discarded").length,
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500">Loading leads...</div>
-      </div>
-    );
-  }
+  const rows = filter ? leads.filter((l) => l.decision === filter) : leads;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Lead Dashboard
-        </h2>
-        <p className="text-gray-600">
-          All inbound leads, scored and decided by the AI agent.
-        </p>
+    <div className="space-y-4">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-[17px] font-semibold tracking-tight">Pipeline</h1>
+          <p className="text-[12.5px] text-stone-500 mt-0.5">
+            Inbound leads scored and routed by the qualification agent.
+          </p>
+        </div>
+        <Link href="/submit" className="btn-primary">+ New Lead</Link>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <SummaryCard
-          label="Total Leads"
-          count={counts.total}
-          color="text-gray-900"
-          onClick={() => setFilter(null)}
-          active={filter === null}
-        />
-        <SummaryCard
-          label="Auto-Outreach"
-          count={counts.auto}
-          color="text-green-600"
-          onClick={() => setFilter("auto-outreach-sent")}
-          active={filter === "auto-outreach-sent"}
-        />
-        <SummaryCard
-          label="Needs Review"
-          count={counts.review}
-          color="text-yellow-600"
-          onClick={() => setFilter("needs-human-review")}
-          active={filter === "needs-human-review"}
-        />
-        <SummaryCard
-          label="Discarded"
-          count={counts.discarded}
-          color="text-red-600"
-          onClick={() => setFilter("discarded")}
-          active={filter === "discarded"}
-        />
+      <div className="stat-strip">
+        {[
+          { label: "Total", n: counts.total, k: null, tone: "text-stone-900" },
+          { label: "Auto-outreach", n: counts.auto, k: "auto-outreach-sent", tone: "text-green-800" },
+          { label: "Needs review", n: counts.review, k: "needs-human-review", tone: "text-amber-700" },
+          { label: "Discarded", n: counts.discarded, k: "discarded", tone: "text-red-700" },
+        ].map((s) => (
+          <button
+            key={s.label}
+            className="stat-cell"
+            data-active={filter === s.k}
+            onClick={() => setFilter(s.k)}
+          >
+            <div className={`stat-num ${s.tone}`}>{loading ? "·" : s.n}</div>
+            <div className="stat-label">{s.label}</div>
+          </button>
+        ))}
       </div>
 
-      {/* Leads table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="card overflow-hidden">
+        <table className="lead-table">
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Lead
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Score
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Created
-              </th>
+              <th>Lead</th>
+              <th>Company</th>
+              <th className="w-20">Score</th>
+              <th className="w-40">Decision</th>
+              <th className="w-24">Received</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredLeads.length === 0 ? (
+          <tbody>
+            {loading && (
+              <tr><td colSpan={5} className="py-10 text-center text-stone-400">Loading…</td></tr>
+            )}
+            {!loading && failed && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                  No leads found.{" "}
-                  <Link href="/submit" className="text-indigo-600 hover:underline">
-                    Submit one →
-                  </Link>
+                <td colSpan={5} className="py-10 text-center text-stone-500">
+                  Backend not reachable — start it with <code className="mono text-[12px]">python main.py</code> in <code className="mono text-[12px]">backend/</code>, then refresh.
                 </td>
               </tr>
-            ) : (
-              filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <Link href={`/leads/${lead.id}`} className="block">
-                      <div className="font-medium text-gray-900 hover:text-indigo-600">
-                        {lead.name}
-                      </div>
-                      <div className="text-sm text-gray-500">{lead.email}</div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{lead.company}</div>
-                    {lead.title && (
-                      <div className="text-xs text-gray-500">{lead.title}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <ScoreDisplay score={lead.score} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={lead.decision} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {new Date(lead.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))
             )}
+            {!loading && !failed && rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-10 text-center text-stone-500">
+                  No leads here yet. <Link href="/submit" className="text-teal-700 font-medium hover:underline">Submit one →</Link>
+                </td>
+              </tr>
+            )}
+            {!loading && !failed && rows.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  <Link href={`/leads/${l.id}`} className="block group">
+                    <div className="font-medium text-stone-900 group-hover:text-teal-800 transition-colors">{l.name}</div>
+                    <div className="text-[12px] text-stone-500 mono">{l.email}</div>
+                  </Link>
+                </td>
+                <td>
+                  <div className="text-stone-800">{l.company}</div>
+                  {l.title && <div className="text-[12px] text-stone-500">{l.title}</div>}
+                </td>
+                <td><Score score={l.score} /></td>
+                <td><Status decision={l.decision} /></td>
+                <td className="text-[12px] text-stone-500 mono">
+                  {new Date(l.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* Quick link */}
-      <div className="mt-6 text-center">
-        <Link
-          href="/submit"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-        >
-          + Submit New Lead
-        </Link>
-      </div>
+      <p className="text-[11.5px] text-stone-400">
+        Scoring rubric: company size · industry fit · inquiry intent · history · email domain · seniority — every factor is logged per lead.
+      </p>
     </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  count,
-  color,
-  onClick,
-  active,
-}: {
-  label: string;
-  count: number;
-  color: string;
-  onClick: () => void;
-  active: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`p-4 rounded-lg border text-left transition-all ${
-        active
-          ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200"
-          : "border-gray-200 bg-white hover:border-gray-300"
-      }`}
-    >
-      <div className={`text-2xl font-bold ${color}`}>{count}</div>
-      <div className="text-sm text-gray-600 mt-1">{label}</div>
-    </button>
   );
 }

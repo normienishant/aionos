@@ -93,12 +93,14 @@ def enrich_company(company_name: str) -> dict:
     sizes = ["1-10 (Startup)", "11-50 (Small)", "51-200 (Mid-size)", "201-1000 (Large)", "1000+ (Enterprise)"]
 
     known = {
-        "google":    {"industry": "Technology / Cloud", "size": "10000+ (Enterprise)", "region": "North America", "website": "google.com", "founded": 1998},
-        "microsoft": {"industry": "Technology / Enterprise Software", "size": "10000+ (Enterprise)", "region": "North America", "website": "microsoft.com", "founded": 1975},
-        "amazon":    {"industry": "E-Commerce / Cloud / Logistics", "size": "10000+ (Enterprise)", "region": "North America", "website": "amazon.com", "founded": 1994},
-        "apple":     {"industry": "Consumer Electronics / Technology", "size": "10000+ (Enterprise)", "region": "North America", "website": "apple.com", "founded": 1976},
-        "meta":      {"industry": "Social Media / Advertising", "size": "10000+ (Enterprise)", "region": "North America", "website": "meta.com", "founded": 2004},
-        "startupco":{"industry": "SaaS / Enterprise Software", "size": "11-50 (Small)", "region": "India / South Asia", "website": "startupco.io", "founded": 2021},
+        "infosys":     {"industry": "IT Services / Technology", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "infosys.com", "founded": 1981},
+        "tcs":         {"industry": "IT Services / Technology", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "tcs.com", "founded": 1968},
+        "wipro":       {"industry": "IT Services / Technology", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "wipro.com", "founded": 1945},
+        "zoho":        {"industry": "SaaS / Enterprise Software", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "zoho.com", "founded": 1996},
+        "freshworks":  {"industry": "SaaS / Enterprise Software", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "freshworks.com", "founded": 2010},
+        "razorpay":    {"industry": "FinTech", "size": "201-1000 (Large)", "region": "India / South Asia", "website": "razorpay.com", "founded": 2014},
+        "zomato":      {"industry": "E-Commerce / Retail", "size": "1000+ (Enterprise)", "region": "India / South Asia", "website": "zomato.com", "founded": 2008},
+        "techcorp solutions": {"industry": "SaaS / Enterprise Software", "size": "201-1000 (Large)", "region": "India / South Asia", "website": "techcorpsolutions.in", "founded": 2016},
     }
 
     if name_lower in known:
@@ -109,7 +111,8 @@ def enrich_company(company_name: str) -> dict:
         # penalizes them naturally.
         local_business_markers = ["shop", "pizza", "cafe", "salon", "freelance",
                                   "photography", "restaurant", "store", "boutique",
-                                  "lawn", "cleaning", "repair", "tutor"]
+                                  "lawn", "cleaning", "repair", "tutor", "kirana",
+                                  "provision", "studio", "designs"]
         is_local_business = any(m in name_lower for m in local_business_markers)
 
         if is_local_business:
@@ -122,13 +125,14 @@ def enrich_company(company_name: str) -> dict:
             size = sizes[0 if name_hash % 2 == 0 else 1]    # Startup or Small
 
         industry_markers = [
-            (["software", "tech", "cloud", "saas", "systems", "solutions", "labs", "digital"], "SaaS / Enterprise Software"),
-            (["finance", "financial", "bank", "capital", "credit", "invest"], "FinTech"),
-            (["health", "med", "pharma", "clinic"], "HealthTech"),
-            (["logistics", "shipping", "freight", "cargo"], "Logistics / Supply Chain"),
+            (["finance", "financial", "bank", "capital", "credit", "invest", "fintech", "pay"], "FinTech"),
+            (["software", "tech", "cloud", "saas", "systems", "solutions", "labs", "digital", "infosoft"], "SaaS / Enterprise Software"),
+            (["health", "med", "pharma", "clinic", "ayur"], "HealthTech"),
+            (["logistics", "shipping", "freight", "cargo", "transport"], "Logistics / Supply Chain"),
             (["consult", "advisory", "partners"], "Consulting / Professional Services"),
-            (["learn", "edu", "academy", "training"], "EdTech"),
-            (["commerce", "retail", "mart", "goods"], "E-Commerce / Retail"),
+            (["learn", "edu", "academy", "training", "vidya"], "EdTech"),
+            (["commerce", "retail", "mart", "goods", "bazaar"], "E-Commerce / Retail"),
+            (["textile", "apparel", "garments", "fab"], "Manufacturing / Textiles"),
         ]
         industry = None
         for markers, ind in industry_markers:
@@ -145,7 +149,8 @@ def enrich_company(company_name: str) -> dict:
         data = {
             "industry": industry,
             "size": size,
-            "region": regions[name_hash % len(regions)],
+            # TLD-style inference: Indian-looking names get India, else hash-pick
+            "region": "India / South Asia" if any(t in name_lower for t in (".in", "india", "bharat", "hind")) or len(name_lower.split()) > 1 and any(w in name_lower for w in ("nagar", "pur", "tex", "traders")) else regions[name_hash % len(regions)],
             "website": f"{name_lower.replace(' ', '')}.com",
             "founded": 2000 + (name_hash % 24),
         }
@@ -272,6 +277,7 @@ def score_lead(
         "pricing", "demo", "trial", "integrat", "pilot", "enterprise",
         "scale", "migration", "custom", "contract", "purchase", "buy",
         "budget", "proposal", "rfp", "evaluation", "assessment", "annual",
+        "lakh", "crore", "inr", "gst", "quotation", "quotation", "po "
     ]
     message_lower = message.lower()
     matched_keywords = [kw for kw in intent_keywords if kw in message_lower]

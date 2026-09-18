@@ -3,40 +3,195 @@
 @tailwind utilities;
 
 :root {
-  --foreground: #171717;
-  --background: #fafafa;
+  --bg: #fafaf9;        /* stone-50 */
+  --card: #ffffff;
+  --line: #e7e5e4;      /* stone-200 */
+  --ink: #1c1917;       /* stone-900 */
+  --muted: #78716c;     /* stone-500 */
+  --accent: #0f766e;    /* teal-700 */
+  --accent-ink: #134e4a;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
 }
 
-/* Smooth transitions for interactive elements */
-.transition-all {
-  transition: all 0.2s ease;
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Code-style trace blocks */
-.trace-block {
-  @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm;
+/* ---------- shell ---------- */
+
+.topbar {
+  @apply bg-white border-b;
+  border-color: var(--line);
 }
 
-/* Email display block */
-.email-block {
-  @apply bg-white border border-gray-200 rounded-lg p-5 whitespace-pre-wrap text-sm leading-relaxed;
+.brand-mark {
+  @apply inline-flex items-center justify-center w-7 h-7 rounded;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-/* Scrollbar styling for trace area */
-.trace-scroll::-webkit-scrollbar {
-  width: 6px;
+.env-pill {
+  @apply ml-2 text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded border;
+  color: var(--muted);
+  border-color: var(--line);
+  background: #fafaf9;
 }
-.trace-scroll::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
+
+/* ---------- primitives ---------- */
+
+.card {
+  @apply bg-white rounded-md border;
+  border-color: var(--line);
 }
-.trace-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors;
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink);
 }
+.btn:hover { background: #f5f5f4; }
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-md px-3.5 py-2 text-[13px] font-semibold text-white transition-colors;
+  background: var(--accent);
+}
+.btn-primary:hover { background: #115e59; }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.field-label {
+  @apply block text-[12px] font-medium mb-1;
+  color: #44403c;
+}
+
+.input {
+  @apply w-full rounded-md border px-3 py-2 text-[13px] outline-none transition-shadow bg-white;
+  border-color: var(--line);
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+/* ---------- status ---------- */
+
+.status { @apply inline-flex items-center gap-1.5 text-[12px] font-medium; }
+.status .dot { @apply w-1.5 h-1.5 rounded-full; }
+
+.status-auto    { color: #166534; }  /* green-800 */
+.status-auto .dot { background: #16a34a; }
+
+.status-review  { color: #854d0e; }  /* amber-800 */
+.status-review .dot { background: #d97706; }
+
+.status-discard { color: #991b1b; }  /* red-800 */
+.status-discard .dot { background: #dc2626; }
+
+.status-pending { color: var(--muted); }
+.status-pending .dot { background: #d6d3d1; }
+
+/* ---------- stats strip ---------- */
+
+.stat-strip {
+  @apply grid grid-cols-2 md:grid-cols-4 rounded-md border overflow-hidden;
+  border-color: var(--line);
+}
+.stat-cell {
+  @apply bg-white px-4 py-3 text-left border-t md:border-t-0 md:border-l cursor-pointer transition-colors;
+  border-color: var(--line);
+}
+.stat-cell:first-child { @apply md:border-l-0 border-t-0; }
+.stat-cell:nth-child(2) { @apply border-t-0; }
+.stat-cell:hover { background: #f5f5f4; }
+.stat-cell[data-active="true"] {
+  background: #f0fdfa;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.stat-num { @apply text-[19px] font-semibold; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.stat-label { @apply text-[11px] uppercase tracking-wide mt-0.5; color: var(--muted); }
+
+/* ---------- table ---------- */
+
+.lead-table { @apply w-full text-[13px]; }
+.lead-table thead th {
+  @apply text-left font-medium text-[11px] uppercase tracking-wide px-4 py-2.5 border-b;
+  color: var(--muted);
+  border-color: var(--line);
+  background: #fafaf9;
+}
+.lead-table tbody td {
+  @apply px-4 py-2.5 border-b align-middle;
+  border-color: #f0efee;
+}
+.lead-table tbody tr:hover { background: #fafaf9; }
+.lead-table tbody tr:last-child td { border-bottom: 0; }
+
+/* ---------- trace timeline ---------- */
+
+.trace-step { @apply relative pl-6 pb-5; }
+.trace-step::before {
+  content: "";
+  position: absolute;
+  left: 5px; top: 6px; bottom: -2px;
+  width: 1px;
+  background: var(--line);
+}
+.trace-step:last-child::before { display: none; }
+.trace-node {
+  position: absolute;
+  left: 0; top: 4px;
+  width: 11px; height: 11px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--accent);
+}
+.trace-final .trace-node { background: var(--accent); }
+
+.tool-name {
+  @apply text-[12.5px] font-semibold;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--accent-ink);
+}
+
+.pre-block {
+  @apply mt-1.5 rounded border px-2.5 py-2 overflow-x-auto text-[11.5px] leading-relaxed;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #fafaf9;
+  border-color: var(--line);
+  color: #44403c;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* ---------- email document ---------- */
+
+.email-doc {
+  @apply rounded-md border px-5 py-4 whitespace-pre-wrap text-[13px] leading-relaxed;
+  border-color: var(--line);
+  background: #fffefb;
+}
+
+.notice-review {
+  @apply rounded-md border px-3.5 py-2.5 text-[12.5px];
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.summary-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.summary-scroll::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 3px; }

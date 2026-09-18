@@ -3,189 +3,114 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function SubmitLead() {
-  const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    company: "",
-    title: "",
-    message: "",
-  });
+const SAMPLE = {
+  name: "Sanjay Kulkarni",
+  email: "sanjay.kulkarni@piscesdigital.in",
+  company: "Pisces Digital",
+  title: "Head of Growth",
+  message:
+    "We manage performance marketing for D2C brands (team of 35 in Pune). Looking for pricing on an annual plan and a demo for our reporting workflow this week.",
+};
 
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+export default function NewLeadPage() {
+  const router = useRouter();
+  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", message: "" });
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function set(k: keyof typeof form) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm({ ...form, [k]: e.target.value });
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
+    setRunning(true);
     setError(null);
-
     try {
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Failed to submit lead");
-      }
-
-      const result = await res.json();
-      // Redirect to the detail page
-      router.push(`/leads/${result.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Submission failed");
+      router.push(`/leads/${data.id}`);
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
-    } finally {
-      setSubmitting(false);
+      setError(err?.message || "Something went wrong — is the backend running?");
+      setRunning(false);
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Submit a New Lead
-        </h2>
-        <p className="text-gray-600">
-          Enter the lead details below. The AI agent will automatically enrich,
-          score, and decide the next action.
-        </p>
-      </div>
+    <div className="max-w-xl">
+      <h1 className="text-[17px] font-semibold tracking-tight">New Lead</h1>
+      <p className="text-[12.5px] text-stone-500 mt-0.5 mb-5">
+        The agent enriches the company, checks history, scores against the ICP, and routes the lead.
+      </p>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-lg border border-gray-200 p-6 space-y-5"
-      >
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Full Name *
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            required
-            placeholder="e.g. Priya Sharma"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-          />
-        </div>
-
-        {/* Email */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email Address *
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            required
-            placeholder="e.g. priya@techcorp.com"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-          />
-        </div>
-
-        {/* Company + Title in two columns */}
-        <div className="grid grid-cols-2 gap-4">
+      <form onSubmit={submit} className="card p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Company Name *
-            </label>
-            <input
-              type="text"
-              name="company"
-              value={form.company}
-              onChange={handleChange}
-              required
-              placeholder="e.g. TechCorp Solutions"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
+            <label className="field-label">Full name *</label>
+            <input className="input" required value={form.name} onChange={set("name")} placeholder="e.g. Nandini Verma" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Job Title
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={form.title}
-              onChange={handleChange}
-              placeholder="e.g. VP of Engineering"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
+            <label className="field-label">Work email *</label>
+            <input className="input" type="email" required value={form.email} onChange={set("email")} placeholder="name@company.in" />
           </div>
         </div>
 
-        {/* Message */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="field-label">Company *</label>
+            <input className="input" required value={form.company} onChange={set("company")} placeholder="e.g. Trivadya Health" />
+          </div>
+          <div>
+            <label className="field-label">Title</label>
+            <input className="input" value={form.title} onChange={set("title")} placeholder="e.g. VP Operations" />
+          </div>
+        </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Inquiry Message *
-          </label>
+          <label className="field-label">Inquiry *</label>
           <textarea
-            name="message"
-            value={form.message}
-            onChange={handleChange}
+            className="input resize-y"
             required
-            rows={4}
-            placeholder="What did the lead say? Paste their inquiry, email, or notes here..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-y"
+            rows={5}
+            value={form.message}
+            onChange={set("message")}
+            placeholder="Paste the inquiry exactly as received — the agent reads intent keywords from it."
           />
         </div>
 
-        {/* Error display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-[12.5px]">
             {error}
           </div>
         )}
 
-        {/* Submit button */}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full py-3 px-4 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              Running Agent...
-            </span>
-          ) : (
-            "Run Agent & Score Lead"
-          )}
-        </button>
-
-        <p className="text-xs text-gray-500 text-center">
-          The agent will enrich the company data, check past interactions, score
-          the lead, and decide: auto-outreach, human review, or discard.
-        </p>
+        <div className="flex items-center gap-3">
+          <button type="submit" className="btn-primary" disabled={running}>
+            {running ? "Agent running…" : "Run qualification"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={running}
+            onClick={() => setForm(SAMPLE)}
+          >
+            Fill sample lead
+          </button>
+          <span className="text-[11.5px] text-stone-400">
+            {running ? "typically 10–30s (LLM loop)" : ""}
+          </span>
+        </div>
       </form>
+
+      <p className="text-[11.5px] text-stone-400 mt-3">
+        Routing: score ≥ 70 → outreach drafted &amp; marked sent · 40–69 → suggested draft, human approval required · &lt; 40 → discarded with reason.
+      </p>
     </div>
   );
 }

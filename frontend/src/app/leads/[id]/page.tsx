@@ -4,14 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
-// Types
 interface TraceStep {
   step: number;
   tool_called?: string;
   arguments?: Record<string, any>;
   result?: any;
   agent_final_response?: string;
-  error?: string;
+  mode?: string;
 }
 
 interface LeadDetail {
@@ -31,370 +30,261 @@ interface LeadDetail {
   reasoning_trace: TraceStep[];
 }
 
-// Status badge
-function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="text-gray-400">Pending</span>;
+const DECISION_META: Record<string, { label: string; cls: string }> = {
+  "auto-outreach-sent": { label: "Auto-outreach sent", cls: "status-auto" },
+  "needs-human-review": { label: "Needs human review", cls: "status-review" },
+  "discarded": { label: "Discarded", cls: "status-discard" },
+};
 
-  const styles: Record<string, string> = {
-    "auto-outreach-sent": "bg-green-100 text-green-800 border-green-200",
-    "needs-human-review": "bg-yellow-100 text-yellow-800 border-yellow-200",
-    discarded: "bg-red-100 text-red-800 border-red-200",
-  };
+const TOOL_LABELS: Record<string, string> = {
+  enrich_company: "enrich_company — company lookup",
+  check_past_interactions: "check_past_interactions — history check",
+  score_lead: "score_lead — ICP scoring",
+  draft_outreach_email: "draft_outreach_email — outreach draft",
+};
 
-  const labels: Record<string, string> = {
-    "auto-outreach-sent": "✅ Auto-Outreach Sent",
-    "needs-human-review": "⚠️ Needs Human Review",
-    discarded: "❌ Discarded",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
-        styles[status] || "bg-gray-100"
-      }`}
-    >
-      {labels[status] || status}
-    </span>
-  );
-}
-
-// Tool icon for trace
-function ToolIcon({ name }: { name: string }) {
-  const icons: Record<string, string> = {
-    enrich_company: "🔍",
-    check_past_interactions: "📋",
-    score_lead: "📊",
-    draft_outreach_email: "✉️",
-  };
-  return <span>{icons[name] || "🔧"}</span>;
-}
-
-export default function LeadDetailPage() {
+export default function LeadCaseFile() {
   const params = useParams();
   const leadId = params.id as string;
   const [lead, setLead] = useState<LeadDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [copiedEmail, setCopiedEmail] = useState(false);
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [emailDraft, setEmailDraft] = useState("");
-  const [savingEmail, setSavingEmail] = useState(false);
+  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/leads/${leadId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { setLead(d); setState("ready"); })
+      .catch(() => setState("error"));
+  }, [leadId]);
 
   async function saveEmail() {
     if (!lead) return;
-    setSavingEmail(true);
+    setSaving(true);
     try {
       const res = await fetch(`/api/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generated_email: emailDraft }),
+        body: JSON.stringify({ generated_email: draft }),
       });
-      if (!res.ok) throw new Error("Failed to save");
-      const updated = await res.json();
-      setLead(updated);
-      setEditingEmail(false);
-    } catch (err) {
-      console.error(err);
-      alert("Could not save the email. Is the backend running?");
+      if (!res.ok) throw new Error();
+      setLead(await res.json());
+      setEditing(false);
+    } catch {
+      alert("Save failed — is the backend running?");
     } finally {
-      setSavingEmail(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchLead();
-  }, [leadId]);
-
-  async function fetchLead() {
-    try {
-      const res = await fetch(`/api/leads/${leadId}`);
-      if (!res.ok) throw new Error("Lead not found");
-      const data = await res.json();
-      setLead(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   function copyEmail() {
     if (lead?.generated_email) {
       navigator.clipboard.writeText(lead.generated_email);
-      setCopiedEmail(true);
-      setTimeout(() => setCopiedEmail(false), 2000);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     }
   }
 
-  if (loading) {
+  if (state === "loading")
+    return <div className="py-20 text-center text-stone-400 text-[13px]">Loading case file…</div>;
+
+  if (state === "error" || !lead)
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500">Loading lead details...</div>
+      <div className="py-20 text-center">
+        <p className="text-stone-500 text-[13px] mb-3">Lead not found.</p>
+        <Link href="/" className="btn">← Back to pipeline</Link>
       </div>
     );
-  }
 
-  if (error || !lead) {
-    return (
-      <div className="text-center py-20">
-        <div className="text-gray-500 mb-4">{error || "Lead not found"}</div>
-        <Link href="/" className="text-indigo-600 hover:underline">
-          ← Back to Dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  const scoreColor =
-    (lead.score || 0) >= 70
-      ? "text-green-600"
-      : (lead.score || 0) >= 40
-      ? "text-yellow-600"
-      : "text-red-600";
-
-  const scoreBg =
-    (lead.score || 0) >= 70
-      ? "bg-green-50 border-green-200"
-      : (lead.score || 0) >= 40
-      ? "bg-yellow-50 border-yellow-200"
-      : "bg-red-50 border-red-200";
+  const meta = lead.decision ? DECISION_META[lead.decision] : null;
+  const scoreTone =
+    lead.score === null ? "" : lead.score >= 70 ? "text-green-800" : lead.score >= 40 ? "text-amber-700" : "text-red-700";
+  const rubricRows = (lead.score_reason || "").split(" | ").filter(Boolean);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back link */}
-      <Link
-        href="/"
-        className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
-      >
-        ← Back to Dashboard
+    <div className="space-y-4">
+      <Link href="/" className="text-[12.5px] text-stone-500 hover:text-stone-800 transition-colors inline-block">
+        ← Pipeline
       </Link>
 
-      {/* Lead header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-4">
+      {/* ---- header ---- */}
+      <div className="card px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{lead.name}</h2>
-            <p className="text-gray-600">{lead.email}</p>
+            <h1 className="text-[16px] font-semibold tracking-tight">{lead.name}</h1>
+            <div className="text-[12.5px] text-stone-500 mono mt-0.5">{lead.email}</div>
           </div>
-          <StatusBadge status={lead.decision} />
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">Company:</span>{" "}
-            <span className="font-medium">{lead.company}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Title:</span>{" "}
-            <span className="font-medium">{lead.title || "Not specified"}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Submitted:</span>{" "}
-            <span className="font-medium">
-              {new Date(lead.created_at).toLocaleString()}
+          {meta && (
+            <span className={`status ${meta.cls} mt-1`}>
+              <span className="dot" />{meta.label}
             </span>
-          </div>
-          <div>
-            <span className="text-gray-500">Past Interactions:</span>{" "}
-            <span className="font-medium">
-              {lead.past_interaction_found ? "Returning lead" : "New lead"}
-            </span>
-          </div>
+          )}
         </div>
-
-        {/* Original message */}
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Lead Message
-          </div>
-          <p className="text-sm text-gray-700">{lead.message}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 mt-4 pt-3 border-t border-stone-100 text-[12.5px]">
+          <Fact label="Company" value={lead.company} />
+          <Fact label="Title" value={lead.title || "—"} />
+          <Fact label="Received" value={new Date(lead.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} />
+          <Fact label="History" value={lead.past_interaction_found ? "Returning" : "New"} />
+        </div>
+        <div className="mt-3 rounded border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-[12.5px] text-stone-700">
+          <span className="text-stone-400 text-[10.5px] uppercase tracking-wide block mb-0.5">Inquiry</span>
+          {lead.message}
         </div>
       </div>
 
-      {/* Score card */}
-      <div className={`rounded-lg border p-6 ${scoreBg}`}>
-        <div className="flex items-center gap-4">
-          <div className="text-5xl font-bold" style={{ color: "inherit" }}>
-            {lead.score}
-          </div>
-          <div>
-            <div className="text-lg font-semibold">Lead Score</div>
-            <div className="text-sm opacity-75">out of 100</div>
+      {/* ---- score ---- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="card px-5 py-4 flex flex-col justify-center">
+          <div className="text-[10.5px] uppercase tracking-wide text-stone-400">ICP Score</div>
+          <div className={`text-[34px] leading-none font-semibold mono mt-1 ${scoreTone}`}>
+            {lead.score ?? "—"}
+            <span className="text-[13px] text-stone-300 font-normal"> /100</span>
           </div>
         </div>
-        {lead.score_reason && (
-          <div className="mt-4 text-sm">
-            <div className="font-medium mb-1">Scoring Reasoning:</div>
-            <div className="space-y-1">
-              {lead.score_reason.split(" | ").map((reason, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-gray-400">•</span>
-                  <span>{reason}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="card px-5 py-4 md:col-span-2">
+          <div className="text-[10.5px] uppercase tracking-wide text-stone-400 mb-2">Rubric breakdown</div>
+          <ul className="space-y-1">
+            {rubricRows.map((r, i) => (
+              <li key={i} className="flex gap-2 text-[12.5px] text-stone-700">
+                <span className="text-stone-300 select-none">·</span>
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      {/* Enrichment data */}
+      {/* ---- enrichment ---- */}
       {lead.enrichment_data && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            🔍 Company Enrichment
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            {Object.entries(lead.enrichment_data).map(([key, value]) => (
-              <div key={key}>
-                <div className="text-xs text-gray-500 uppercase tracking-wide">
-                  {key.replace(/_/g, " ")}
-                </div>
-                <div className="font-medium">
-                  {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                </div>
-              </div>
-            ))}
+        <div className="card px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10.5px] uppercase tracking-wide text-stone-400">Company enrichment</div>
+            <span className="mono text-[10.5px] text-stone-400">
+              source: {String(lead.enrichment_data.enrichment_source || "unknown")}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-[12.5px]">
+            {Object.entries(lead.enrichment_data)
+              .filter(([k]) => k !== "enrichment_source")
+              .map(([k, v]) => (
+                <Fact key={k} label={k.replace(/_/g, " ")} value={typeof v === "object" ? JSON.stringify(v) : String(v)} />
+              ))}
           </div>
         </div>
       )}
 
-      {/* Reasoning trace */}
+      {/* ---- reasoning trace ---- */}
       {lead.reasoning_trace.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            🧠 Agent Reasoning Trace
-          </h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Step-by-step of what the agent did and why — this is the full audit
-            trail.
-          </p>
-          <div className="space-y-3 trace-scroll">
-            {lead.reasoning_trace.map((step, i) => (
-              <div key={i} className="trace-block">
-                {step.tool_called ? (
-                  <>
-                    <div className="flex items-center gap-2 mb-2">
-                      <ToolIcon name={step.tool_called} />
-                      <span className="font-semibold text-indigo-700">
-                        Step {step.step}: {step.tool_called}
-                      </span>
-                    </div>
-                    {step.arguments && (
-                      <details className="mb-2">
-                        <summary className="text-xs text-gray-500 cursor-pointer">
-                          Arguments
-                        </summary>
-                        <pre className="mt-1 text-xs text-gray-600 overflow-x-auto">
-                          {JSON.stringify(step.arguments, null, 2)}
-                        </pre>
-                      </details>
-                    )}
-                    {step.result && (
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Result:</div>
-                        <pre className="text-xs text-gray-700 overflow-x-auto max-h-40 overflow-y-auto">
-                          {JSON.stringify(step.result, null, 2)}
-                        </pre>
+        <div className="card px-5 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10.5px] uppercase tracking-wide text-stone-400">Agent reasoning trace</div>
+            <span className="mono text-[10.5px] text-stone-400">{lead.reasoning_trace.length} steps</span>
+          </div>
+          <div>
+            {lead.reasoning_trace.map((s, i) => {
+              const isFinal = !s.tool_called;
+              const isFallback = s.mode === "local-fallback";
+              return (
+                <div key={i} className={`trace-step ${isFinal ? "trace-final" : ""}`}>
+                  <span className="trace-node" />
+                  {s.tool_called ? (
+                    <>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[10.5px] text-stone-400 mono">step {s.step}</span>
+                        <span className="tool-name">{TOOL_LABELS[s.tool_called] || s.tool_called}</span>
+                        {isFallback && (
+                          <span className="mono text-[10px] text-amber-700 border border-amber-200 bg-amber-50 rounded px-1">
+                            local-fallback
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </>
-                ) : step.agent_final_response ? (
-                  <>
-                    <div className="font-semibold text-green-700 mb-2">
-                      🤖 Agent Final Response
-                    </div>
-                    <pre className="text-xs text-gray-700 whitespace-pre-wrap">
-                      {step.agent_final_response}
-                    </pre>
-                  </>
-                ) : step.error ? (
-                  <div className="text-red-600 text-sm">Error: {step.error}</div>
-                ) : null}
-              </div>
-            ))}
+                      {s.arguments && Object.keys(s.arguments).length > 0 && (
+                        <details className="mt-1">
+                          <summary className="text-[11px] text-stone-400 cursor-pointer hover:text-stone-600 select-none">arguments</summary>
+                          <pre className="pre-block">{JSON.stringify(s.arguments, null, 2)}</pre>
+                        </details>
+                      )}
+                      {s.result && (
+                        <details open={s.tool_called === "score_lead"}>
+                          <summary className="text-[11px] text-stone-400 cursor-pointer hover:text-stone-600 select-none">result</summary>
+                          <pre className="pre-block">{JSON.stringify(s.result, null, 2)}</pre>
+                        </details>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[10.5px] text-stone-400 mono">step {s.step}</span>
+                        <span className="tool-name text-green-800">final decision</span>
+                      </div>
+                      <pre className="pre-block">{s.agent_final_response}</pre>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Generated email */}
-      {lead.generated_email && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              ✉️ Generated Outreach Email
-            </h3>
+      {/* ---- outreach email ---- */}
+      {lead.generated_email ? (
+        <div className="card px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10.5px] uppercase tracking-wide text-stone-400">Outreach draft</div>
             <div className="flex gap-2">
-              {!editingEmail && (
+              {editing ? (
                 <>
-                  <button
-                    onClick={copyEmail}
-                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    {copiedEmail ? "✓ Copied!" : "Copy"}
+                  <button className="btn-primary !py-1" onClick={saveEmail} disabled={saving}>
+                    {saving ? "Saving…" : "Save"}
                   </button>
-                  <button
-                    onClick={() => {
-                      setEmailDraft(lead.generated_email || "");
-                      setEditingEmail(true);
-                    }}
-                    className="px-3 py-1 text-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg transition-colors"
-                  >
+                  <button className="btn !py-1" onClick={() => setEditing(false)}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn !py-1" onClick={copyEmail}>{copied ? "Copied" : "Copy"}</button>
+                  <button className="btn !py-1" onClick={() => { setDraft(lead.generated_email || ""); setEditing(true); }}>
                     Edit
                   </button>
                 </>
               )}
-              {editingEmail && (
-                <>
-                  <button
-                    onClick={saveEmail}
-                    disabled={savingEmail}
-                    className="px-3 py-1 text-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-colors"
-                  >
-                    {savingEmail ? "Saving..." : "Save"}
-                  </button>
-                  <button
-                    onClick={() => setEditingEmail(false)}
-                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
             </div>
           </div>
-          {editingEmail ? (
+
+          {editing ? (
             <textarea
-              value={emailDraft}
-              onChange={(e) => setEmailDraft(e.target.value)}
+              className="input mono !text-[12.5px] leading-relaxed"
               rows={14}
-              className="w-full px-4 py-3 border border-indigo-300 rounded-lg font-mono text-sm leading-relaxed focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-y"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
             />
           ) : (
-            <div className="email-block">{lead.generated_email}</div>
+            <div className="email-doc">{lead.generated_email}</div>
           )}
-          {lead.decision === "needs-human-review" && (
-            <p className="mt-3 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              ⚠️ This email is a <strong>suggestion only</strong> — a human must
-              review and approve before sending.
+
+          {lead.decision === "needs-human-review" && !editing && (
+            <p className="notice-review mt-3">
+              Suggested draft only — a human must review and approve before anything is sent.
             </p>
           )}
         </div>
+      ) : (
+        <div className="card px-5 py-4 text-[12.5px] text-stone-500">
+          No outreach draft — this lead was routed to <strong>discarded</strong>. The rubric breakdown above records why.
+        </div>
       )}
+    </div>
+  );
+}
 
-      {/* Action buttons */}
-      <div className="flex gap-4">
-        <Link
-          href="/submit"
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-        >
-          + Submit Another Lead
-        </Link>
-        <Link
-          href="/"
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
-        >
-          Back to Dashboard
-        </Link>
-      </div>
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10.5px] uppercase tracking-wide text-stone-400">{label}</div>
+      <div className="text-stone-800 mt-0.5 break-words">{value}</div>
     </div>
   );
 }

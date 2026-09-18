@@ -1,14 +1,12 @@
 """
-Seed script — populates the database with 7 realistic leads to demo all three paths.
+Seed script — populates the database with 8 realistic leads to demo all three paths.
 
 Run: cd backend && python seed.py
 
 The leads are designed to test every decision path:
-  - Leads 1-3: High score (≥70) → auto-outreach-sent
-  - Leads 4-5: Mid score (40-69) → needs-human-review
-  - Leads 6-7: Low score (<40) → discarded
-
-Each lead has different enrichment characteristics to show the scoring logic working.
+  - Leads 1, 3:   high score (≥70)  → auto-outreach-sent
+  - Leads 2, 4, 5: borderline        → needs-human-review
+  - Leads 6-8:    low score (<40)   → discarded
 """
 
 import json
@@ -48,56 +46,63 @@ MOCK_LEADS = [
     # === HIGH SCORE (≥70) — should auto-outreach ===
     {
         "name": "Priya Sharma",
-        "email": "priya.sharma@techcorp.com",
-        "company": "TechCorp Solutions",
-        "title": "VP of Engineering",
-        "message": "We're looking at enterprise integration platforms for our team of 200+. We have a budget of ₹50L annual and need a demo next week. Could you send a proposal?",
+        "email": "priya.sharma@zenithsoftech.in",
+        "company": "Zenith Softech",
+        "title": "VP Engineering",
+        "message": "Hi, we saw your booth at NASSCOM Product Conclave. We're evaluating integration platforms for our 400-seat engineering org. Budget of ₹65 lakh approved for this FY. Can you share pricing and set up a demo next week? Also need the GST quotation format for procurement.",
     },
     {
-        "name": "Marcus Johnson",
-        "email": "marcus.j@cloudnine.io",
-        "company": "CloudNine",
-        "title": "Head of Sales",
-        "message": "Interested in your pricing for an annual enterprise contract. We're migrating from a competitor and need pilot access for evaluation. Team of 50 people.",
+        "name": "Rohit Deshpande",
+        "email": "rohit.deshpande@vardhmanlogistics.co.in",
+        "company": "Vardhman Logistics",
+        "title": "Head of Operations",
+        "message": "We run 220 trucks across 11 states and are migrating from Tally to a proper ops platform. Need custom ERP integration and a pilot in our Nagpur hub first. Procurement wants an RFP — can your team participate?",
     },
     {
-        "name": "Sarah Chen",
-        "email": "sarah.chen@globalfinance.com",
-        "company": "Global Finance Partners",
-        "title": "Director of Operations",
-        "message": "We need a custom integration with our existing ERP system. Budget approved for Q1. Looking at enterprise solutions — can we schedule a demo?",
+        "name": "Kavitha Raman",
+        "email": "kavitha.r@meridianfintech.com",
+        "company": "Meridian FinTech",
+        "title": "Director - Product",
+        "message": "We're a Series-B fintech (220 people, Bengaluru) scaling our lending ops. Your platform was recommended by our investors. Need enterprise pricing for annual contract, and a demo for our product council. Timeline: this quarter.",
     },
 
     # === MID SCORE (40-69) — should need human review ===
     {
-        "name": "Alex Rivera",
-        "email": "alex.r@creativestudio.co",
-        "company": "Creative Studio",
+        "name": "Arjun Nair",
+        "email": "arjun.nair@blueoakconsulting.in",
+        "company": "BlueOak Consulting",
         "title": "Project Manager",
-        "message": "Just curious about your product. We're a small design agency (15 people) and wondering if this could help with our workflow. No immediate budget, maybe next quarter.",
+        "message": "Hello, we're a 40-person consulting firm in Kochi. Curious if this could work for client onboarding. No fixed budget yet — partner saab will approve if the ROI is clear. Maybe share some case studies?",
     },
     {
-        "name": "Fatima Al-Rashid",
-        "email": "fatima@growthmetrics.com",
-        "company": "GrowthMetrics",
-        "title": "Business Analyst",
-        "message": "Hi, we're evaluating several options for our team. Could you share pricing and maybe a quick demo? We have about 80 people and might be interested if the ROI makes sense.",
+        "name": "Meenakshi Sundaram",
+        "email": "meena.s@srilakshmitextiles.com",
+        "company": "Sri Lakshmi Textiles",
+        "title": "GM - Exports",
+        "message": "We export garments to EU buyers and they want digital tracking. We are about 90 people in Tirupur. What would pricing look like for something like this? Do you give a demo before we decide?",
     },
 
     # === LOW SCORE (<40) — should discard ===
     {
-        "name": "Tommy Lee",
-        "email": "tommy.lee@gmail.com",
-        "company": "Tommy's Pizza Shop",
+        "name": "Rajesh Kirana Store",
+        "email": "rajesh.kirana@gmail.com",
+        "company": "Rajesh Kirana & General Store",
         "title": "",
-        "message": "Hey, just stumbled on your website. Cool stuff! I run a pizza place and wondering if you guys do anything for restaurants? Probably not but thought I'd ask lol",
+        "message": "Namaste sir, maine aapki website dekhi. Mera kirana shop hai Jaipur me. Aapka software humko sasta milega kya? GST bill bhi hota hai isme? Rate batao please.",
     },
     {
-        "name": "Jane Doe",
-        "email": "jane.doe@yahoo.com",
-        "company": "Freelance Photography",
-        "title": "Freelancer",
-        "message": "Hi, I'm a freelance photographer. Do you have a free tier? I don't have much budget. Thanks!",
+        "name": "Pooja Makeover Studio",
+        "email": "pooja.beauty@yahoo.com",
+        "company": "Pooja Makeover Studio",
+        "title": "Owner",
+        "message": "Hi! I run a beauty studio in Lucknow. Koi free trial hai? Budget nahi hai abhi, baad me dekhenge. Instagram pe bhi kaam karta hai kya ye?",
+    },
+    {
+        "name": "Deepak Tuition Classes",
+        "email": "deepak.classes@rediffmail.com",
+        "company": "Deepak Tuition Classes",
+        "title": "Teacher",
+        "message": "Sir I am running tuition classes for 10th-12th science in Indore since 12 years. Aapka product school ke liye hai ya coaching ke liye bhi? Fees kitni hai per month? Beta ke school me bhi bhej sakta hu.",
     },
 ]
 
