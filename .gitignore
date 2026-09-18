@@ -26,3 +26,9 @@ Thumbs.db
 
 # Personal prep notes — not part of the project deliverable
 NOTES.md
+
+# Test artifacts
+test_leads.db
+test_leads.db-shm
+test_leads.db-wal
+.pytest_cache/
