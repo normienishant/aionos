@@ -26,7 +26,7 @@ from models import Lead, LeadDecision
 _EMAIL_MODEL = os.getenv("LLM_MODEL", "gemini-flash-lite-latest")
 
 # Wikimedia's robot policy requires a descriptive User-Agent with contact info.
-_WIKI_UA = "SalesLeadQualificationAgent/1.0 (https://github.com/normienishant/aionos; contact: contact-via-github) httpx"
+_WIKI_UA = "SalesLeadQualificationAgent/1.0 (educational demo; contact via github.com/normienishant) httpx"
 
 
 def enrich_company(company_name: str) -> dict:
