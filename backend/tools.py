@@ -26,7 +26,7 @@ from models import Lead, LeadDecision
 _EMAIL_MODEL = os.getenv("LLM_MODEL", "gemini-flash-lite-latest")
 
 # Wikimedia's robot policy requires a descriptive User-Agent with contact info.
-_WIKI_UA = "SalesLeadQualificationAgent/1.0 (educational demo; contact via github.com/normienishant) httpx"
+_WIKI_UA = "LeadDeskAgent/1.0 (educational demo; https://github.com/normienishant/aionos)"
 
 
 def enrich_company(company_name: str) -> dict:
@@ -111,7 +111,8 @@ def enrich_company(company_name: str) -> dict:
         # penalizes them naturally.
         local_business_markers = ["shop", "pizza", "cafe", "salon", "freelance",
                                   "photography", "restaurant", "store", "boutique",
-                                  "lawn", "cleaning", "repair", "tutor", "kirana",
+                                  "lawn", "cleaning", "repair", "tutor", "tuition",
+                                  "classes", "coaching", "kirana",
                                   "provision", "studio", "designs"]
         is_local_business = any(m in name_lower for m in local_business_markers)
 
@@ -127,7 +128,8 @@ def enrich_company(company_name: str) -> dict:
         industry_markers = [
             (["finance", "financial", "bank", "capital", "credit", "invest", "fintech", "pay"], "FinTech"),
             (["software", "tech", "cloud", "saas", "systems", "solutions", "labs", "digital", "infosoft"], "SaaS / Enterprise Software"),
-            (["health", "med", "pharma", "clinic", "ayur"], "HealthTech"),
+            (["media", "advertising", "entertainment", "creative", "studios"], "Media / Creative Services"),
+            (["health", "medical", "pharma", "clinic", "ayur"], "HealthTech"),
             (["logistics", "shipping", "freight", "cargo", "transport"], "Logistics / Supply Chain"),
             (["consult", "advisory", "partners"], "Consulting / Professional Services"),
             (["learn", "edu", "academy", "training", "vidya"], "EdTech"),
@@ -143,8 +145,10 @@ def enrich_company(company_name: str) -> dict:
             industry = industries[name_hash % len(industries)]
 
         if is_local_business:
-            local_industries = ["Food & Beverage / Local Retail", "Local Services / Sole Proprietor"]
-            industry = local_industries[name_hash % len(local_industries)]
+            food_markers = ("pizza", "cafe", "restaurant", "kirana", "store", "bakery", "sweet", "provision")
+            industry = ("Food & Beverage / Local Retail"
+                        if any(m in name_lower for m in food_markers)
+                        else "Local Services / Sole Proprietor")
 
         data = {
             "industry": industry,
